@@ -18,11 +18,13 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <div className="bg-gradient-to-r from-primary-600 to-primary-700 p-2 rounded-lg">
-              <BarChart3 className="text-white" size={24} />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="ExpenseIQ Logo" 
+              className="w-10 h-10 object-contain"
+            />
             <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
-              Money Manager
+              ExpenseIQ
             </span>
           </Link>
 
