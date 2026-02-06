@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, TrendingUp, TrendingDown, Wallet, Calendar } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, Wallet, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { dashboardService } from '../services/api';
 import { formatCurrency } from '../utils/helpers';
@@ -14,6 +14,7 @@ const Dashboard = () => {
   const [categorySummary, setCategorySummary] = useState([]);
   const [divisionSummary, setDivisionSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 7));
 
@@ -23,25 +24,33 @@ const Dashboard = () => {
 
   const loadDashboardData = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Load summary
-      const summaryRes = await dashboardService.getSummary({ period, date: selectedDate });
-      setSummary(summaryRes.data.data);
-
-      // Load chart data
       const year = new Date(selectedDate).getFullYear();
-      const chartRes = await dashboardService.getChartData({ period, year });
+
+      // OPTIMIZED: Make all API calls in parallel using Promise.all
+      const [summaryRes, chartRes, categoryRes, divisionRes] = await Promise.all([
+        dashboardService.getSummary({ period, date: selectedDate }),
+        dashboardService.getChartData({ period, year }),
+        dashboardService.getCategorySummary({ type: 'EXPENSE' }),
+        dashboardService.getDivisionSummary({})
+      ]);
+
+      // Set all states at once
+      setSummary(summaryRes.data.data);
       setChartData(chartRes.data.data);
-
-      // Load category summary for expenses
-      const categoryRes = await dashboardService.getCategorySummary({ type: 'EXPENSE' });
       setCategorySummary(categoryRes.data.data);
-
-      // Load division summary
-      const divisionRes = await dashboardService.getDivisionSummary({});
       setDivisionSummary(divisionRes.data.data);
     } catch (error) {
       console.error('Error loading dashboard:', error);
+      setError('Failed to load dashboard data. Please try again.');
+      
+      // Set fallback data to prevent UI breaking
+      setSummary({ totalIncome: 0, totalExpense: 0, balance: 0, periodLabel: '' });
+      setChartData({ labels: [], income: [], expense: [] });
+      setCategorySummary([]);
+      setDivisionSummary({ divisions: {} });
     } finally {
       setLoading(false);
     }
@@ -51,19 +60,65 @@ const Dashboard = () => {
     if (!chartData) return [];
     return chartData.labels.map((label, index) => ({
       name: label,
-      Income: chartData.income[index],
-      Expense: chartData.expense[index],
+      Income: chartData.income[index] || 0,
+      Expense: chartData.expense[index] || 0,
     }));
   };
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d'];
 
+  // Loading skeleton component
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header Skeleton */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+            <div className="h-10 bg-gray-200 rounded w-48 mb-4 md:mb-0 animate-pulse"></div>
+            <div className="flex gap-3">
+              <div className="h-10 bg-gray-200 rounded w-32 animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded w-40 animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded w-40 animate-pulse"></div>
+            </div>
+          </div>
+
+          {/* Summary Cards Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="card animate-pulse">
+                <div className="h-6 bg-gray-200 rounded w-32 mb-4"></div>
+                <div className="h-10 bg-gray-200 rounded w-40"></div>
+              </div>
+            ))}
+          </div>
+
+          {/* Charts Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {[1, 2].map((i) => (
+              <div key={i} className="card animate-pulse">
+                <div className="h-6 bg-gray-200 rounded w-48 mb-6"></div>
+                <div className="h-64 bg-gray-200 rounded"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+        <div className="container mx-auto px-4 py-8">
+          <div className="card text-center py-12">
+            <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Error Loading Dashboard</h3>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button onClick={loadDashboardData} className="btn-primary">
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -200,7 +255,7 @@ const Dashboard = () => {
         </div>
 
         {/* Division Summary */}
-        {divisionSummary && (
+        {divisionSummary && Object.keys(divisionSummary.divisions).length > 0 && (
           <div className="card">
             <h3 className="text-xl font-bold text-gray-800 mb-6">Division Summary</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
