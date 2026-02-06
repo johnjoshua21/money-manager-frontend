@@ -19,7 +19,7 @@ const Navbar = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
             <img 
-              src="public\logo.png" 
+              src="/logo.png"
               alt="ExpenseIQ Logo" 
               className="w-10 h-10 object-contain"
             />
